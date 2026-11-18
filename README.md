@@ -24,7 +24,7 @@ With early stopping enabled, the estimator sets aside a seeded random validation
 
 ## Demonstration
 
-Each experiment uses a seeded 75/25 train/test split, stratified for classification. Feature standardization is fitted on the outer training split. Both models use 24 tanh units, batch size 16, constant learning rate 0.02, classical momentum 0.8, and a fixed 160-epoch budget. The scikit-learn reference uses SGD with zero L2 penalty. For regression, the reference also standardizes targets using training statistics. The synthetic dataset contains 650 rows of three independent uniform features on $[-2,2]$, with target $\sin(2x_1) + 0.5x_2x_3 + \epsilon$ and Gaussian noise of standard deviation 0.1.
+Each experiment uses a seeded 75/25 train/test split, stratified for classification. The main comparisons fit feature standardization on the outer training split. Diabetes is loaded with its original feature scales. Both models use 24 tanh units, batch size 16, constant learning rate 0.02, classical momentum 0.8, and a fixed 160-epoch budget. The scikit-learn reference uses SGD with zero L2 penalty. For regression, the reference also standardizes targets using training statistics. The synthetic dataset contains 650 rows of three independent uniform features on $[-2,2]$, with target $\sin(2x_1) + 0.5x_2x_3 + \epsilon$ and Gaussian noise of standard deviation 0.1.
 
 | Dataset | Held-out metric | SimpleSLP | scikit-learn MLP |
 | --- | --- | ---: | ---: |
@@ -35,9 +35,11 @@ Each experiment uses a seeded 75/25 train/test split, stratified for classificat
 
 ![Training-loss curves for both models on all four datasets](training_loss.png)
 
-The breast cancer, Iris, and synthetic regression scores are close on these held-out samples. Diabetes has the largest gap, and its training loss continues falling despite the lower held-out R². In a supplementary Diabetes run, the custom model used 20% of the outer training rows for validation and a patience of 12 epochs. It stopped at epoch 22, restored epoch 10, and scored 0.4851 on the same test rows. The feature scaler used the full outer training split for this run, including validation features. The test split was used for scoring only. The results describe one split per dataset, and the early-stopped run also used fewer optimization rows.
+The breast cancer, Iris, and synthetic regression scores are close on these held-out samples. Diabetes has the largest gap, and its training loss continues falling despite the lower held-out R². In a supplementary Diabetes run, the custom model used 20% of the outer training rows for validation and a patience of 12 epochs. It stopped at epoch 22, restored epoch 10, and scored 0.4823 on the same test rows. Feature and target scaling statistics were computed only on the rows used to update the weights. Validation selected the checkpoint. The test split was used for scoring only. The results describe one split per dataset, and the early-stopped run also used fewer optimization rows.
 
-The plot doubles scikit-learn's half-squared-error values to show MSE for both regression implementations. The reference aggregates its batch losses during each epoch. SimpleSLP evaluates loss at the end of each epoch. The implementations also use different initialization and shuffle sequences, and the same learning rate acts on differently scaled regression gradients. The reference emitted a convergence warning at the fixed epoch cap for each dataset.
+![Diabetes training and validation loss with the restored epoch marked](diabetes_early_stopping.png)
+
+The comparison plot doubles scikit-learn's half-squared-error values to show MSE for both regression implementations. The reference aggregates its batch losses during each epoch. SimpleSLP evaluates loss at the end of each epoch. The implementations also use different initialization and shuffle sequences, and the same learning rate acts on differently scaled regression gradients. The reference emitted a convergence warning at the fixed epoch cap for each dataset.
 
 ## Reproduce
 
@@ -47,4 +49,4 @@ python -m pytest -q
 python demonstrate.py
 ```
 
-The demonstration prints the held-out scores and regenerates `training_loss.png`. The reported run used Python 3.13, NumPy 2.3.5, scikit-learn 1.9.1, and Matplotlib 3.10.0.
+The demonstration prints the held-out scores and regenerates both loss figures. The reported run used Python 3.13, NumPy 2.3.5, scikit-learn 1.9.1, and Matplotlib 3.10.0.

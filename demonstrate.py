@@ -1,4 +1,4 @@
-"""Reproduce the held-out comparison and save training_loss.png."""
+"""Reproduce the held-out comparison and save both loss figures."""
 
 from pathlib import Path
 
@@ -35,12 +35,12 @@ def nonlinear_data():
 
 def compare(X, y, classification, *, demonstrate_early_stopping=False):
     stratify = y if classification else None
-    X_train, X_test, y_train, y_test = train_test_split(
+    raw_train, raw_test, y_train, y_test = train_test_split(
         X, y, test_size=0.25, random_state=SEED, stratify=stratify
     )
     feature_scaler = StandardScaler()
-    X_train = feature_scaler.fit_transform(X_train)
-    X_test = feature_scaler.transform(X_test)
+    X_train = feature_scaler.fit_transform(raw_train)
+    X_test = feature_scaler.transform(raw_test)
 
     common = dict(
         activation="tanh",
@@ -88,18 +88,18 @@ def compare(X, y, classification, *, demonstrate_early_stopping=False):
             validation_fraction=0.2,
             n_iter_no_change=12,
             **common,
-        ).fit(X_train, y_train)
-        early_result = (
-            early.score(X_test, y_test),
-            early.n_iter_,
-            int(np.argmin(early.validation_loss_curve_)) + 1,
         )
+        # Reproduce the estimator's seeded split before fitting the feature scaler.
+        training_rows, _ = early._split_indices(y_train, np.random.default_rng(SEED))
+        early_scaler = StandardScaler().fit(raw_train[training_rows])
+        early.fit(early_scaler.transform(raw_train), y_train)
+        early_result = early, early.score(early_scaler.transform(raw_test), y_test)
     return own.score(X_test, y_test), reference_score, own.loss_curve_, reference_loss, early_result
 
 
 def main():
     experiments = [
-        ("Diabetes", *load_diabetes(return_X_y=True), False),
+        ("Diabetes", *load_diabetes(return_X_y=True, scaled=False), False),
         ("Breast cancer", *load_breast_cancer(return_X_y=True), True),
         ("Iris", *load_iris(return_X_y=True), True),
         ("Synthetic nonlinear regression", *nonlinear_data(), False),
@@ -128,8 +128,22 @@ def main():
         ax.grid(axis="y", alpha=0.25)
         ax.legend(frameon=False)
 
-    score, stopped, best = diabetes_early_result
-    print(f"\nDiabetes early stopping: R²={score:.4f}, stopped at epoch {stopped}, restored epoch {best}.")
+    early, score = diabetes_early_result
+    best = int(np.argmin(early.validation_loss_curve_)) + 1
+    print(
+        f"\nDiabetes early stopping: R²={score:.4f}, "
+        f"stopped at epoch {early.n_iter_}, restored epoch {best}."
+    )
+    early_fig, early_ax = plt.subplots(figsize=(7, 4), layout="constrained")
+    epochs = range(1, early.n_iter_ + 1)
+    early_ax.plot(epochs, early.loss_curve_, color="#126781", label="Training")
+    early_ax.plot(epochs, early.validation_loss_curve_, color="#b44b21", label="Validation")
+    early_ax.axvline(best, color="#454b54", linestyle="--", label=f"Restored epoch {best}")
+    early_ax.set(title="Diabetes early stopping", xlabel="Epoch", ylabel="MSE (scaled targets)")
+    early_ax.grid(axis="y", alpha=0.25)
+    early_ax.legend(frameon=False)
+    early_fig.savefig(Path(__file__).with_name("diabetes_early_stopping.png"), dpi=170)
+    plt.close(early_fig)
     fig.suptitle("Training loss by dataset", fontsize=16)
     fig.savefig(Path(__file__).with_name("training_loss.png"), dpi=170)
     plt.close(fig)
