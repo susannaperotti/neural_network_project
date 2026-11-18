@@ -1,178 +1,51 @@
-"""
-SimpleSLPRegressor - Single Layer Perceptron for Regression
-"""
+"""Single-hidden-layer regressor with a linear output."""
 
-from typing import Optional, Tuple
 import numpy as np
-from numpy.typing import NDArray
+from sklearn.base import RegressorMixin
+from sklearn.utils.validation import validate_data
+
 from slp_base import BaseSLPEstimator
 
 
-class SimpleSLPRegressor(BaseSLPEstimator):
+class SimpleSLPRegressor(RegressorMixin, BaseSLPEstimator):
+    """Fit continuous targets with mean squared error. Score returns R².
+
+    Losses are measured on targets standardized using optimization rows.
+    Predictions are converted back to the original target units.
     """
-    Simple Single Layer Perceptron Regressor with one hidden layer.
 
-    Compatible interface with sklearn.neural_network.MLPRegressor.
-    """
+    def _output_activation(self, logits):
+        return logits
 
-    def __init__(
-        self,
-        hidden_layer_size: int = 100,
-        activation: str = "logistic",
-        learning_rate: float = 0.001,
-        max_iter: int = 200,
-        random_state: Optional[int] = None,
-    ) -> None:
-        """
-        Initialize the SLP regressor.
+    def _output_error(self, y, y_pred):
+        # MSE averages across samples and outputs.
+        return 2 * (y_pred - y) / y.size
 
-        Parameters:
-        -----------
-        hidden_layer_size : int
-            Number of neurons in the hidden layer
-        activation : str
-            Activation function ('identity', 'logistic', 'tanh', 'relu'}, default='logistic')
-        learning_rate : float
-            Learning rate for gradient descent
-        max_iter : int
-            Maximum number of iterations
-        random_state : int or None
-            Random seed for reproducibility
-        """
-        super().__init__(
-            hidden_layer_size, activation, learning_rate, max_iter, random_state
-        )
+    def _compute_loss(self, y_true, y_pred):
+        return float(np.mean((y_pred - y_true) ** 2))
 
-    def _forward_propagation(self, X: NDArray[np.floating]) -> Tuple[
-        NDArray[np.floating],
-        NDArray[np.floating],
-        NDArray[np.floating],
-        NDArray[np.floating],
-    ]:
-        """
-        Perform forward propagation.
+    def fit(self, X, y):
+        """Fit to a vector of targets or a matrix of multiple outputs."""
+        self._validate_parameters()
+        X, y = validate_data(self, X, y, dtype=float, multi_output=True, y_numeric=True)
+        y = np.asarray(y, dtype=float)
+        if y.size == 0 or not np.isfinite(y).all():
+            raise ValueError("y must contain at least one finite numeric target per sample")
+        rng = np.random.default_rng(self.random_state)
+        indices = self._split_indices(y, rng)
+        self._single_target = y.ndim == 1
+        targets = y.reshape(len(y), -1)
+        self.n_outputs_ = targets.shape[1]
+        training_targets = targets[indices[0]]
+        self.target_mean_ = training_targets.mean(axis=0)
+        scale = training_targets.std(axis=0)
+        self.target_scale_ = np.where(scale == 0, 1.0, scale)
+        scaled_targets = (targets - self.target_mean_) / self.target_scale_
+        self._train(X, scaled_targets, rng, indices)
+        return self
 
-        Parameters:
-        -----------
-        X : array-like, shape (n_samples, n_features)
-            Input data
-
-        Returns:
-        --------
-        z1, a1, z2, y_pred : tuple of arrays
-            Intermediate values for backpropagation
-        """
-        # TODO: Implement forward propagation
-        pass
-
-    def _backward_propagation(
-        self,
-        X: NDArray[np.floating],
-        y: NDArray[np.floating],
-        z1: NDArray[np.floating],
-        a1: NDArray[np.floating],
-        z2: NDArray[np.floating],
-        y_pred: NDArray[np.floating],
-    ) -> Tuple[
-        NDArray[np.floating],
-        NDArray[np.floating],
-        NDArray[np.floating],
-        NDArray[np.floating],
-    ]:
-        """
-        Perform backpropagation to compute gradients.
-
-        Parameters:
-        -----------
-        X : array-like, shape (n_samples, n_features)
-            Input data
-        y : array-like, shape (n_samples, n_outputs)
-            Target values
-        z1, a1, z2, y_pred : arrays
-            Values from forward propagation
-
-        Returns:
-        --------
-        dW1, db1, dW2, db2 : tuple of arrays
-            Gradients for weights and biases
-        """
-        # TODO: Implement backpropagation for MSE loss
-        pass
-
-    def _compute_loss(
-        self, y_true: NDArray[np.floating], y_pred: NDArray[np.floating]
-    ) -> float:
-        """
-        Compute mean squared error loss.
-
-        Parameters:
-        -----------
-        y_true : array-like
-            True values
-        y_pred : array-like
-            Predicted values
-
-        Returns:
-        --------
-        loss : float
-            MSE loss
-        """
-        # TODO: Implement MSE
-        pass
-
-    def fit(
-        self, X: NDArray[np.floating], y: NDArray[np.floating]
-    ) -> "SimpleSLPRegressor":
-        """
-        Fit the SLP regressor to training data.
-
-        Parameters:
-        -----------
-        X : array-like, shape (n_samples, n_features)
-            Training data
-        y : array-like, shape (n_samples,) or (n_samples, n_outputs)
-            Target values
-
-        Returns:
-        --------
-        self : object
-            Fitted estimator
-        """
-        # TODO: Implement training loop (similar to classifier)
-        pass
-
-    def predict(self, X: NDArray[np.floating]) -> NDArray[np.floating]:
-        """
-        Predict using the trained model.
-
-        Parameters:
-        -----------
-        X : array-like, shape (n_samples, n_features)
-            Samples
-
-        Returns:
-        --------
-        y_pred : array-like, shape (n_samples,) or (n_samples, n_outputs)
-            Predicted values
-        """
-        # TODO: Implement prediction
-        pass
-
-    def score(self, X: NDArray[np.floating], y: NDArray[np.floating]) -> float:
-        """
-        Return the R² score on the given test data.
-
-        Parameters:
-        -----------
-        X : array-like, shape (n_samples, n_features)
-            Test samples
-        y : array-like, shape (n_samples,) or (n_samples, n_outputs)
-            True values
-
-        Returns:
-        --------
-        score : float
-            R² score
-        """
-        # TODO: Implement R² score
-        pass
+    def predict(self, X):
+        """Return continuous predictions with the same target rank as during fit."""
+        predictions = self._predict_outputs(X)
+        predictions = predictions * self.target_scale_ + self.target_mean_
+        return predictions[:, 0] if self._single_target else predictions
